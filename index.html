@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DHATU OS - Multiprocessing Desktop</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes spin-reverse { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+        
+        .animate-spin-slow { animation: spin-slow 12s linear infinite; }
+        .animate-spin-reverse { animation: spin-reverse 8s linear infinite; }
+        
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(51, 65, 85, 0.4);
+        }
+
+        .window {
+            position: absolute;
+            min-width: 300px;
+            min-height: 200px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s;
+        }
+
+        .window-hidden {
+            transform: scale(0.9);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .taskbar-icon {
+            transition: all 0.2s;
+        }
+        .taskbar-icon:hover {
+            transform: translateY(-4px);
+            background: rgba(8, 145, 178, 0.2);
+        }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-[#020617] text-slate-300 h-screen w-screen overflow-hidden font-sans selection:bg-cyan-500/30">
+
+    <!-- Desktop Background with Dhatu Circle -->
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-30 lg:opacity-60">
+        <div class="relative w-[300px] h-[300px] md:w-[500px] md:h-[500px]">
+            <div id="ring-outer" class="absolute inset-0 border-4 border-dashed border-cyan-500/20 rounded-full animate-spin-slow"></div>
+            <div id="ring-inner" class="absolute inset-[10%] border-2 border-cyan-400/30 rounded-full animate-spin-reverse"></div>
+            <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                <div id="core-load" class="text-6xl md:text-8xl font-black text-white/40 tabular-nums">00%</div>
+                <div id="core-instr" class="text-cyan-500/50 font-mono text-xs tracking-widest mt-2 uppercase">Kernel Idle</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Window Manager Layer -->
+    <div id="desktop-area" class="relative h-full w-full p-4 overflow-hidden">
+        
+        <!-- Calculator App -->
+        <div id="win-calc" class="window window-hidden glass-panel rounded-xl top-20 left-20 w-64 h-auto" style="z-index: 10;">
+            <div class="window-header flex justify-between p-3 bg-slate-800/40 cursor-move rounded-t-xl">
+                <span class="text-[10px] font-bold tracking-widest uppercase">Calculator</span>
+                <button onclick="toggleWindow('win-calc')" class="text-slate-400 hover:text-red-400">✕</button>
+            </div>
+            <div class="p-4 bg-black/40">
+                <input id="calc-display" type="text" readonly class="w-full bg-transparent text-right text-2xl font-mono mb-4 outline-none text-cyan-400" value="0">
+                <div class="grid grid-cols-4 gap-2">
+                    <button onclick="calcClear()" class="p-2 bg-slate-800 rounded hover:bg-slate-700">C</button>
+                    <button onclick="calcIn('/')" class="p-2 bg-slate-800 rounded hover:bg-slate-700">÷</button>
+                    <button onclick="calcIn('*')" class="p-2 bg-slate-800 rounded hover:bg-slate-700">×</button>
+                    <button onclick="calcIn('-')" class="p-2 bg-slate-800 rounded hover:bg-slate-700">-</button>
+                    <button onclick="calcIn('7')" class="p-2 bg-slate-700 rounded hover:bg-slate-600">7</button>
+                    <button onclick="calcIn('8')" class="p-2 bg-slate-700 rounded hover:bg-slate-600">8</button>
+                    <button onclick="calcIn('9')" class="p-2 bg-slate-700 rounded hover:bg-slate-600">9</button>
+                    <button onclick="calcIn('+')" class="p-2 bg-slate-800 rounded hover:bg-slate-700" style="grid-row: span 2">+</button>
+                    <button onclick="calcIn('4')" class="p-2 bg-slate-700 rounded hover:bg-slate-600">4</button>
+                    <button onclick="calcIn('5')" class="p-2 bg-slate-700 rounded hover:bg-slate-600">5</button>
+                    <button onclick="calcIn('6')" class="p-2 bg-slate-700 rounded hover:bg-slate-600">6</button>
+                    <button onclick="calcIn('1')" class="p-2 bg-slate-700 rounded hover:bg-slate-600">1</button>
+                    <button onclick="calcIn('2')" class="p-2 bg-slate-700 rounded hover:bg-slate-600">2</button>
+                    <button onclick="calcIn('3')" class="p-2 bg-slate-700 rounded hover:bg-slate-600">3</button>
+                    <button onclick="calcSolve()" class="p-2 bg-cyan-600 text-white rounded hover:bg-cyan-500" style="grid-column: span 1; grid-row: span 2">=</button>
+                    <button onclick="calcIn('0')" class="p-2 bg-slate-700 rounded hover:bg-slate-600" style="grid-column: span 2">0</button>
+                    <button onclick="calcIn('.')" class="p-2 bg-slate-700 rounded hover:bg-slate-600">.</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Browser App -->
+        <div id="win-browser" class="window window-hidden glass-panel rounded-xl top-10 right-10 w-[600px] h-[450px]" style="z-index: 5;">
+            <div class="window-header flex justify-between p-3 bg-slate-800/40 cursor-move rounded-t-xl">
+                <span class="text-[10px] font-bold tracking-widest uppercase">Web Browser</span>
+                <button onclick="toggleWindow('win-browser')" class="text-slate-400 hover:text-red-400">✕</button>
+            </div>
+            <div class="flex items-center gap-2 p-2 bg-slate-900 border-b border-slate-800">
+                <input type="text" id="browser-url" value="https://dhatu-os.kernel/network" class="flex-1 bg-black/40 border border-slate-700 rounded px-3 py-1 text-[10px] font-mono outline-none focus:border-cyan-500">
+                <button class="px-2 py-1 bg-slate-800 rounded text-[10px]">GO</button>
+            </div>
+            <div class="flex-1 bg-white p-6 overflow-auto text-slate-800">
+                <h2 class="text-2xl font-bold mb-4">Welcome to Dhatu Web</h2>
+                <p class="text-sm text-slate-600">Browser successfully established on v8-shim environment.</p>
+                <div class="mt-8 grid grid-cols-2 gap-4">
+                    <div class="p-4 border rounded hover:bg-slate-50 cursor-pointer">
+                        <div class="font-bold">Dhatu Docs</div>
+                        <div class="text-[10px] opacity-70">Language documentation</div>
+                    </div>
+                    <div class="p-4 border rounded hover:bg-slate-50 cursor-pointer">
+                        <div class="font-bold">System Hub</div>
+                        <div class="text-[10px] opacity-70">Monitor node network</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- IDE / Code Editor -->
+        <div id="win-editor" class="window window-hidden glass-panel rounded-xl left-1/4 top-1/4 w-[700px] h-[500px]" style="z-index: 8;">
+            <div class="window-header flex justify-between p-3 bg-slate-800/40 cursor-move rounded-t-xl">
+                <span class="text-[10px] font-bold tracking-widest uppercase">Dhatu-IDE</span>
+                <button onclick="toggleWindow('win-editor')" class="text-slate-400 hover:text-red-400">✕</button>
+            </div>
+            <div class="flex flex-1 overflow-hidden">
+                <div class="w-12 bg-slate-900/50 flex flex-col items-center py-4 gap-4 border-r border-slate-800">
+                    <div class="w-6 h-6 bg-cyan-500/10 text-cyan-500 flex items-center justify-center rounded">{}</div>
+                </div>
+                <div class="flex-1 flex flex-col">
+                    <div class="flex text-[9px] bg-slate-900 border-b border-slate-800 px-4 py-2 gap-4 uppercase font-bold text-slate-500">
+                        <span class="text-cyan-400 border-b border-cyan-400">kernel_main.dht</span>
+                        <span>boot_config.json</span>
+                    </div>
+                    <textarea spellcheck="false" class="flex-1 bg-black/40 p-4 font-mono text-xs text-cyan-100 outline-none resize-none leading-relaxed">
+// Dhatu Programming Language - Kernel Initialization
+module main {
+    import std.io;
+    import dhatu.mem;
+
+    @EntryPoint
+    fn init() -> Status {
+        let heap = mem::allocate(0xF000);
+        io::println("DHATU KERNEL BOOTING...");
+        
+        loop {
+            let task = scheduler::next();
+            task.execute();
+            if task.is_halted() { break; }
+        }
+        
+        return Status::Ok;
+    }
+}
+                    </textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal CLI -->
+        <div id="win-terminal" class="window window-hidden glass-panel rounded-xl bottom-20 left-10 w-[500px] h-[300px]" style="z-index: 6;">
+            <div class="window-header flex justify-between p-3 bg-slate-800/40 cursor-move rounded-t-xl">
+                <span class="text-[10px] font-bold tracking-widest uppercase">Terminal CLI</span>
+                <button onclick="toggleWindow('win-terminal')" class="text-slate-400 hover:text-red-400">✕</button>
+            </div>
+            <div id="term-body" class="p-4 flex-1 font-mono text-[11px] overflow-y-auto bg-black/60 text-emerald-400">
+                <div>Dhatu OS [Version 2.4.1]</div>
+                <div>(c) 2024 Dhatu Kernel Distribution. All rights reserved.</div>
+                <div class="mt-4">$ help</div>
+                <div class="text-slate-400">Available commands: sysinfo, ls, cd, cat, top, calc</div>
+                <div class="mt-2 flex">
+                    <span>$ &nbsp;</span>
+                    <input type="text" id="term-input" class="bg-transparent border-none outline-none flex-1 text-white">
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Taskbar / Dock -->
+    <div class="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-slate-900/60 backdrop-blur-xl px-4 py-3 rounded-2xl border border-slate-700/50 shadow-2xl z-50">
+        <button onclick="toggleWindow('win-browser')" class="taskbar-icon w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center group" title="Browser">
+            <svg class="text-blue-400 group-hover:text-blue-300" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+        </button>
+        <button onclick="toggleWindow('win-editor')" class="taskbar-icon w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center group" title="IDE">
+            <svg class="text-purple-400 group-hover:text-purple-300" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+        </button>
+        <button onclick="toggleWindow('win-terminal')" class="taskbar-icon w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center group" title="Terminal">
+            <svg class="text-emerald-400 group-hover:text-emerald-300" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+        </button>
+        <div class="w-px h-8 bg-slate-700/50 mx-1"></div>
+        <button onclick="toggleWindow('win-calc')" class="taskbar-icon w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center group" title="Calculator">
+            <svg class="text-orange-400 group-hover:text-orange-300" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"></rect><line x1="8" y1="6" x2="16" y2="6"></line><line x1="16" y1="14" x2="16" y2="18"></line><path d="M16 10h.01"></path><path d="M12 10h.01"></path><path d="M8 10h.01"></path><path d="M12 14h.01"></path><path d="M8 14h.01"></path><path d="M12 18h.01"></path><path d="M8 18h.01"></path></svg>
+        </button>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="fixed top-0 left-0 right-0 h-8 flex items-center justify-between px-6 text-[10px] font-mono tracking-widest text-slate-500 bg-slate-900/40 backdrop-blur z-50 pointer-events-none">
+        <div class="flex items-center gap-4">
+            <span class="text-cyan-500 font-bold">DHATU_OS // 0xF3A</span>
+            <span id="os-clock">00:00:00</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <span id="os-datalake">200k NODES MAPPED</span>
+            <span class="text-emerald-500">ENCRYPTION: ON</span>
+        </div>
+    </div>
+
+    <script>
+        // --- System Data Logic ---
+        let data = [];
+        let currentIndex = 0;
+        const coreLoad = document.getElementById('core-load');
+        const coreInstr = document.getElementById('core-instr');
+
+        async function initKernel() {
+            try {
+                // Correct path for the uploaded file
+                const response = await fetch('operativesystemdathu(1).json');
+                if (response.ok) {
+                    data = await response.json();
+                } else {
+                    throw new Error("Local file not found, initializing fallback simulator.");
+                }
+            } catch (e) { 
+                console.warn(e.message);
+                // Fallback generator if fetch fails or file path is invalid
+                data = Array.from({length: 1000}, (_, i) => ({ 
+                    metrics: { cyc: Math.floor(Math.random()*100) }, 
+                    instr: ["LOAD_A", "STORE_B", "ADD_XY", "SYS_WAIT", "FORK_THR"][i % 5] 
+                }));
+            } finally {
+                startDataStream();
+            }
+        }
+
+        function startDataStream() {
+            if (data.length === 0) return;
+            setInterval(() => {
+                const item = data[currentIndex];
+                if (item && item.metrics) {
+                    coreLoad.innerText = `${item.metrics.cyc.toString().padStart(2, '0')}%`;
+                    coreInstr.innerText = item.instr || "DHATU_IDLE";
+                }
+                currentIndex = (currentIndex + 1) % data.length;
+            }, 800);
+        }
+
+        // --- Clock ---
+        setInterval(() => {
+            const clockEl = document.getElementById('os-clock');
+            if (clockEl) clockEl.innerText = new Date().toLocaleTimeString('en-US', { hour12: false });
+        }, 1000);
+
+        // --- Window Management ---
+        function toggleWindow(id) {
+            const win = document.getElementById(id);
+            if (!win) return;
+            win.classList.toggle('window-hidden');
+            if(!win.classList.contains('window-hidden')) {
+                bringToFront(win);
+            }
+        }
+
+        function bringToFront(el) {
+            const windows = document.querySelectorAll('.window');
+            windows.forEach(w => w.style.zIndex = "5");
+            el.style.zIndex = "20";
+        }
+
+        // Simple Dragging
+        let activeWin = null;
+        let offset = { x: 0, y: 0 };
+
+        document.addEventListener('mousedown', (e) => {
+            const header = e.target.closest('.window-header');
+            if (header) {
+                activeWin = header.parentElement;
+                bringToFront(activeWin);
+                const rect = activeWin.getBoundingClientRect();
+                offset = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (activeWin) {
+                activeWin.style.left = `${e.clientX - offset.x}px`;
+                activeWin.style.top = `${e.clientY - offset.y}px`;
+            }
+        });
+
+        document.addEventListener('mouseup', () => activeWin = null);
+
+        // --- Calculator Logic ---
+        const calcDisplay = document.getElementById('calc-display');
+        window.calcIn = function(val) { 
+            if (calcDisplay.value === '0') calcDisplay.value = val;
+            else calcDisplay.value += val; 
+        };
+        window.calcClear = function() { calcDisplay.value = '0'; };
+        window.calcSolve = function() {
+            try { 
+                // Simple calculation solver
+                const result = Function('"use strict";return (' + calcDisplay.value + ')')();
+                calcDisplay.value = result; 
+            }
+            catch { calcDisplay.value = 'Error'; }
+        };
+
+        // --- Terminal CLI Logic ---
+        const termInput = document.getElementById('term-input');
+        const termBody = document.getElementById('term-body');
+        if (termInput) {
+            termInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const cmd = termInput.value.toLowerCase().trim();
+                    if (!cmd) return;
+                    
+                    const line = document.createElement('div');
+                    line.innerHTML = `<span class="text-white">$ ${cmd}</span>`;
+                    termBody.insertBefore(line, termInput.parentElement);
+                    
+                    const response = document.createElement('div');
+                    response.className = "text-slate-400 mb-2";
+                    
+                    if (cmd === 'sysinfo') response.innerText = "DhatuOS v2.4 | Kernel: D-33 | RAM: 64GB Virtual | CPU: 128-Core Simulator";
+                    else if (cmd === 'ls') response.innerText = "bin/  dev/  etc/  sys/  home/  operativesystemdathu.json";
+                    else if (cmd === 'top') response.innerText = `Kernel Load: ${coreLoad.innerText} | Active Instr: ${coreInstr.innerText}`;
+                    else if (cmd === 'help') response.innerText = "Available: sysinfo, ls, top, clear, calc, exit";
+                    else if (cmd === 'clear') {
+                        const entries = termBody.querySelectorAll('div:not(:last-child)');
+                        entries.forEach(node => node.remove());
+                        termInput.value = '';
+                        return;
+                    }
+                    else response.innerText = "Command not found. Type 'help' for options.";
+                    
+                    termBody.insertBefore(response, termInput.parentElement);
+                    termInput.value = '';
+                    termBody.scrollTop = termBody.scrollHeight;
+                }
+            });
+        }
+
+        window.onload = initKernel;
+    </script>
+</body>
+</html>
